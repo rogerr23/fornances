@@ -1,0 +1,43 @@
+# Arquivos que o git deve ignorar (nunca vão para o repositório).
+
+# dependências (reinstaladas com `pnpm install`)
+/node_modules
+/.pnp
+.pnp.*
+
+# testes (relatório de cobertura do Vitest)
+/coverage
+
+# next.js (saída de build, gerada de novo a cada `pnpm build`/`pnpm dev`)
+/.next/
+/out/
+/build
+
+# sistema operacional e editores
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# certificados
+*.pem
+
+# logs
+npm-debug.log*
+.pnpm-debug.log*
+
+# variáveis de ambiente: segredos ficam só na sua máquina e na Vercel.
+# O .env.example (sem valores) é a exceção e vai para o repositório.
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript (arquivos gerados automaticamente)
+*.tsbuildinfo
+next-env.d.ts
+
+# configurações locais do Claude Code (específicas desta máquina)
+/.claude/launch.json
+/.claude/settings.local.json
