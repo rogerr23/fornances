@@ -21,6 +21,7 @@ export type LancamentoDaLista = {
   grupoParcelamentoId: string | null;
   numeroParcela: number | null;
   totalParcelas: number | null;
+  recorrenciaId: string | null;
   categoria: { id: string; nome: string; cor: string; icone: string };
 };
 
@@ -59,6 +60,7 @@ export async function listarLancamentos(filtros: FiltrosLancamentos) {
       grupoParcelamentoId: lancamentos.grupoParcelamentoId,
       numeroParcela: lancamentos.numeroParcela,
       totalParcelas: lancamentos.totalParcelas,
+      recorrenciaId: lancamentos.recorrenciaId,
       categoria: {
         id: categorias.id,
         nome: categorias.nome,

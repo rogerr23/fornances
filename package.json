@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:criar-usuario": "tsx scripts/criar-usuario.ts"
+    "db:criar-usuario": "tsx scripts/criar-usuario.ts",
+    "db:gerar-recorrencias": "tsx scripts/gerar-recorrencias.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

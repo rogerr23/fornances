@@ -300,14 +300,18 @@ Cartões e faturas, metas/orçamentos, recorrências com frequência diferente d
 │   │   ├── dinheiro.ts              # parse/formatação de centavos
 │   │   ├── datas.ts                 # intervalos de mês, mesmo período anterior, fuso SP
 │   │   ├── parcelas.ts              # geração de parcelas (novas e já em andamento)
-│   │   ├── recorrencias.ts          # data da cobrança no mês, primeira cobrança, meses a gerar
+│   │   ├── recorrencias.ts          # data da cobrança no mês, primeira cobrança, meses a gerar, reativação
+│   │   ├── validacao-lancamento.ts  # schemas Zod de lançamentos e filtros
+│   │   ├── validacao-recorrencia.ts # schemas Zod de recorrentes
+│   │   └── rotulos.ts               # textos dos enums (Crédito, VR...)
 │   │   └── comparacao.ts            # variação %, regra de cor
 │   ├── server/
 │   │   ├── auth-config.ts           # criarAuth(db): configuração do Better Auth
 │   │   ├── auth.ts                  # `auth` do app + obterSessao() + exigirUsuario()
 │   │   ├── queries/                 # inicio.ts, lancamentos.ts, recorrencias.ts, categorias.ts
 │   │   ├── actions/                 # lancamentos.ts, recorrencias.ts, categorias.ts
-│   │   └── gerador-recorrencias.ts  # gerarCobrancasPendentes(db, usuarioId, hoje): usado pelo cron, pelas actions e pelo script
+│   │   ├── categoria-valida.ts      # checagem de categoria compartilhada pelas actions
+│   │   └── gerador-recorrencias.ts  # gerarCobrancasPendentes(db, hoje, usuarioId?): usado pelo cron, pelas actions e pelo script
 │   ├── proxy.ts                     # redireciona para /login quem não tem cookie de sessão
 │   └── tests/                       # dinheiro.test.ts, datas.test.ts, parcelas.test.ts, comparacao.test.ts
 ├── drizzle.config.ts
@@ -345,7 +349,7 @@ Cartões e faturas, metas/orçamentos, recorrências com frequência diferente d
 - Botão **Sair** no rodapé da barra lateral (desktop) e no menu do usuário (mobile).
 - Nenhum segredo no código; `.env` no `.gitignore`; `.env.example` versionado.
 - **Gerador de recorrentes:**
-  - **Vercel Cron diário** (`vercel.json`, `0 3 * * *` em UTC = meia-noite em SP) chama `GET /api/cron/recorrencias`. A rota só aceita o cabeçalho `Authorization: Bearer ${CRON_SECRET}` (é o que a Vercel envia) e responde 401 a qualquer outro.
+  - **Vercel Cron diário** (`vercel.json`, `0 3 * * *` em UTC = meia-noite em SP) chama `GET /api/cron/recorrencias`. A rota fica fora do `proxy.ts` (não tem sessão; se protege pelo segredo). A rota só aceita o cabeçalho `Authorization: Bearer ${CRON_SECRET}` (é o que a Vercel envia) e responde 401 a qualquer outro.
   - **Roda todo dia, mas só cria o que falta.** Fica idempotente por `ultimaCompetenciaGerada` + unique (recorrencia, competencia). Se um dia o cron falhar, o seguinte completa.
   - Também roda **na hora** ao criar, editar ou reativar uma recorrente (só para aquele usuário), e pelo script `pnpm db:gerar-recorrencias` em dev.
   - O plano Hobby da Vercel permite 1 execução por dia, com horário aproximado (pode atrasar até ~1h). É suficiente para "no dia 1 já aparecer".

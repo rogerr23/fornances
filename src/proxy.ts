@@ -12,6 +12,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Roda em tudo, MENOS: /login, rotas do Better Auth, arquivos do Next e arquivos com extensão.
-  matcher: ["/((?!login|api/auth|_next/static|_next/image|.*\\..*).*)"],
+  // Roda em tudo, MENOS: /login, rotas do Better Auth, a rota do cron (ela se protege
+  // com o CRON_SECRET, não com sessão), arquivos do Next e arquivos com extensão.
+  matcher: ["/((?!login|api/auth|api/cron|_next/static|_next/image|.*\\..*).*)"],
 };

@@ -143,6 +143,48 @@ export const categorias = pgTable(
   ],
 );
 
+// Assinaturas e receitas fixas mensais (SPEC 3.9). Os lançamentos de cada mês são criados
+// pelo gerador (src/server/gerador-recorrencias.ts) e ficam ligados por `recorrenciaId`.
+export const recorrencias = pgTable(
+  "recorrencias",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    usuarioId: text("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    categoriaId: uuid("categoria_id").notNull(),
+    tipo: tipoLancamento("tipo").notNull(),
+    meioPagamento: meioPagamento("meio_pagamento").notNull(),
+    descricao: text("descricao").notNull(), // "Netflix", "Salário"
+    valorCentavos: integer("valor_centavos").notNull(),
+    diaCobranca: smallint("dia_cobranca").notNull(), // 1..31 (31 em fevereiro → dia 28/29)
+    inicioEm: date("inicio_em").notNull(), // 1º dia do mês da primeira cobrança
+    // 1º dia do último mês já gerado. O gerador sempre continua DEPOIS dele, por isso
+    // excluir um lançamento gerado não faz ele voltar.
+    ultimaCompetenciaGerada: date("ultima_competencia_gerada"),
+    canceladaEm: date("cancelada_em"), // null = ativa
+    criadoEm: timestamp("criado_em", { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("recorrencias_usuario_idx").on(t.usuarioId),
+    // Para a chave composta de `lancamentos` (recorrência + usuário).
+    unique("recorrencias_id_usuario_uq").on(t.id, t.usuarioId),
+    // Mesma proteção dos lançamentos: categoria do mesmo usuário e do mesmo tipo.
+    foreignKey({
+      name: "recorrencias_categoria_fk",
+      columns: [t.categoriaId, t.usuarioId, t.tipo],
+      foreignColumns: [categorias.id, categorias.usuarioId, categorias.tipo],
+    }),
+    check("recorrencias_valor_positivo", sql`${t.valorCentavos} > 0`),
+    check("recorrencias_dia_valido", sql`${t.diaCobranca} BETWEEN 1 AND 31`),
+    check("recorrencias_inicio_dia_1", sql`extract(day from ${t.inicioEm}) = 1`),
+  ],
+);
+
 export const lancamentos = pgTable(
   "lancamentos",
   {
@@ -161,6 +203,9 @@ export const lancamentos = pgTable(
     grupoParcelamentoId: uuid("grupo_parcelamento_id"),
     numeroParcela: smallint("numero_parcela"),
     totalParcelas: smallint("total_parcelas"),
+    // Preenchidos só nos lançamentos criados por uma recorrente:
+    recorrenciaId: uuid("recorrencia_id"),
+    competencia: date("competencia"), // 1º dia do mês a que a cobrança se refere
     criadoEm: timestamp("criado_em", { withTimezone: true }).defaultNow().notNull(),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
       .defaultNow()
@@ -171,6 +216,8 @@ export const lancamentos = pgTable(
     index("lancamentos_usuario_data_idx").on(t.usuarioId, t.dataLancamento),
     index("lancamentos_grupo_parcelamento_idx").on(t.grupoParcelamentoId),
     index("lancamentos_categoria_idx").on(t.categoriaId),
+    // Nunca gerar o mesmo mês duas vezes para a mesma recorrente.
+    uniqueIndex("lancamentos_recorrencia_competencia_uq").on(t.recorrenciaId, t.competencia),
 
     // Chave estrangeira COMPOSTA: o lançamento só pode usar uma categoria que seja
     // do MESMO usuário e do MESMO tipo (receita/despesa). Mesmo que um bug no código
@@ -181,7 +228,22 @@ export const lancamentos = pgTable(
       foreignColumns: [categorias.id, categorias.usuarioId, categorias.tipo],
     }),
 
+    // A recorrente precisa ser do mesmo usuário do lançamento.
+    foreignKey({
+      name: "lancamentos_recorrencia_fk",
+      columns: [t.recorrenciaId, t.usuarioId],
+      foreignColumns: [recorrencias.id, recorrencias.usuarioId],
+    }),
+
     check("lancamentos_valor_positivo", sql`${t.valorCentavos} > 0`),
+    // Recorrente: os 2 campos juntos, e nunca misturado com parcelamento.
+    check(
+      "lancamentos_recorrencia_consistente",
+      sql`(${t.recorrenciaId} IS NULL AND ${t.competencia} IS NULL) OR (
+        ${t.recorrenciaId} IS NOT NULL AND ${t.competencia} IS NOT NULL
+        AND ${t.grupoParcelamentoId} IS NULL
+      )`,
+    ),
     // Parcelas: ou os 3 campos estão preenchidos (e o meio é crédito), ou nenhum está.
     check(
       "lancamentos_parcelas_consistentes",
@@ -202,5 +264,6 @@ export type Categoria = typeof categorias.$inferSelect;
 export type NovaCategoria = typeof categorias.$inferInsert;
 export type Lancamento = typeof lancamentos.$inferSelect;
 export type NovoLancamento = typeof lancamentos.$inferInsert;
+export type Recorrencia = typeof recorrencias.$inferSelect;
 export type TipoLancamento = (typeof tipoLancamento.enumValues)[number];
 export type MeioPagamento = (typeof meioPagamento.enumValues)[number];

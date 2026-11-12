@@ -16,12 +16,15 @@ export async function Cabecalho() {
         <p className="text-sm">
           Olá, <span className="font-medium">{primeiroNome}</span>
         </p>
-        <nav className="flex gap-3 text-sm text-muted-foreground">
+        <nav className="flex gap-3 overflow-x-auto text-sm text-muted-foreground">
           <Link href="/" className="py-2 hover:text-foreground">
             Início
           </Link>
           <Link href="/lancamentos" className="py-2 hover:text-foreground">
             Lançamentos
+          </Link>
+          <Link href="/recorrentes" className="py-2 hover:text-foreground">
+            Recorrentes
           </Link>
         </nav>
       </div>

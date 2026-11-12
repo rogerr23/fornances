@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ehDataValida,
   ehMesValido,
+  formatarDataCompleta,
   formatarDiaCurto,
   formatarMes,
   hojeEmSaoPaulo,
@@ -132,6 +133,7 @@ describe("textos de data em pt-BR", () => {
   it("dia curto e mês por extenso", () => {
     expect(formatarDiaCurto("2026-11-11")).toBe("11 nov");
     expect(formatarMes("2026-11")).toBe("Novembro, 2026");
+    expect(formatarDataCompleta("2026-12-05")).toBe("05/12/2026");
   });
 
   it("somarDias atravessa mês e ano", () => {

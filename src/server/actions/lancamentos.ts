@@ -1,11 +1,11 @@
 "use server";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { categorias, lancamentos, type NovoLancamento, type TipoLancamento } from "@/db/schema";
+import { lancamentos, type NovoLancamento } from "@/db/schema";
 import { gerarParcelas, gerarParcelasRestantes } from "@/lib/parcelas";
 import {
   edicaoLancamentoSchema,
@@ -14,6 +14,7 @@ import {
   novoLancamentoSchema,
 } from "@/lib/validacao-lancamento";
 import { exigirUsuario } from "@/server/auth";
+import { categoriaValida } from "@/server/categoria-valida";
 
 // Toda action segue a mesma receita (SPEC 7):
 // (1) usuário da sessão  (2) valida com Zod  (3) grava filtrando pelo usuário  (4) refresh()
@@ -23,24 +24,6 @@ export type ResultadoAcao<T = object> = ({ ok: true } & T) | { ok: false; erro: 
 
 function primeiroErro(erro: z.ZodError): string {
   return erro.issues[0]?.message ?? "Dados inválidos.";
-}
-
-// A categoria precisa ser do usuário, do tipo certo e não estar arquivada.
-// (O banco também garante usuário e tipo pela chave composta; aqui é para dar uma
-// mensagem amigável em vez de um erro de banco.)
-async function categoriaValida(usuarioId: string, categoriaId: string, tipo: TipoLancamento) {
-  const [categoria] = await db
-    .select({ id: categorias.id })
-    .from(categorias)
-    .where(
-      and(
-        eq(categorias.id, categoriaId),
-        eq(categorias.usuarioId, usuarioId),
-        eq(categorias.tipo, tipo),
-        isNull(categorias.arquivadoEm),
-      ),
-    );
-  return Boolean(categoria);
 }
 
 export async function criarLancamento(entrada: unknown): Promise<ResultadoAcao<{ ids: string[] }>> {

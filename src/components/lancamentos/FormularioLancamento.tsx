@@ -3,8 +3,15 @@
 import { Trash2 } from "lucide-react";
 import { useRef, useState, useTransition, type FormEvent } from "react";
 
-import { IconeCategoria } from "@/components/categorias/IconeCategoria";
 import { avisos } from "@/components/layout/Avisos";
+import {
+  AlternadorTipo,
+  CampoValor,
+  GradeCategorias,
+  SeletorMeio,
+} from "@/components/layout/CamposFormulario";
+import { Chip } from "@/components/layout/Chip";
+import { CLASSE_GAVETA } from "@/components/layout/gaveta";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +26,6 @@ import type { MeioPagamento, TipoLancamento } from "@/db/schema";
 import { hojeEmSaoPaulo, somarDias } from "@/lib/datas";
 import { aplicarMascaraValor, formatarCentavos } from "@/lib/dinheiro";
 import { MAXIMO_PARCELAS, valorDaParcela } from "@/lib/parcelas";
-import { MEIOS_PAGAMENTO, ROTULO_MEIO } from "@/lib/rotulos";
 import type { Escopo } from "@/lib/validacao-lancamento";
 import {
   criarLancamento,
@@ -32,9 +38,8 @@ import type { LancamentoDaLista, PadroesDoFormulario } from "@/server/queries/la
 
 import { useLancamento } from "./ContextoLancamento";
 
-// O diálogo em si. No celular abre como uma "gaveta" que sobe de baixo (classes sem
-// prefixo); a partir de `sm:` vira um diálogo centralizado. Um componente só, sem
-// precisar detectar o tamanho da tela no JavaScript.
+// O diálogo em si: gaveta de baixo no celular, diálogo centralizado no computador
+// (ver CLASSE_GAVETA).
 export function DialogoLancamento(props: {
   categorias: CategoriaResumo[];
   padroes: PadroesDoFormulario;
@@ -45,10 +50,7 @@ export function DialogoLancamento(props: {
 
   return (
     <Dialog open={estado.aberto} onOpenChange={(aberto) => !aberto && fechar()}>
-      <DialogContent
-        initialFocus={campoValor}
-        className="top-auto bottom-0 left-0 max-h-[92dvh] max-w-full translate-x-0 translate-y-0 overflow-y-auto rounded-b-none p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl"
-      >
+      <DialogContent initialFocus={campoValor} className={CLASSE_GAVETA}>
         <DialogHeader>
           <DialogTitle>{edicao ? "Editar lançamento" : "Novo lançamento"}</DialogTitle>
           <DialogDescription className="sr-only">
@@ -220,67 +222,27 @@ function Formulario({ categorias, padroes, edicao, campoValor, aoTerminar }: For
       aria-busy={salvando}
     >
       {/* Despesa / Receita (parcelas não mudam de tipo) */}
-      {!ehParcela && (
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="radiogroup">
-          {(["despesa", "receita"] as const).map((opcao) => (
-            <button
-              key={opcao}
-              type="button"
-              role="radio"
-              aria-checked={tipo === opcao}
-              onClick={() => trocarTipo(opcao)}
-              className={`h-10 rounded-md text-sm font-medium transition-colors ${
-                tipo === opcao
-                  ? opcao === "despesa"
-                    ? "bg-card text-saida shadow-sm"
-                    : "bg-card text-entrada shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {opcao === "despesa" ? "Despesa" : "Receita"}
-            </button>
-          ))}
-        </div>
-      )}
+      {!ehParcela && <AlternadorTipo tipo={tipo} onChange={trocarTipo} />}
 
-      {/* Valor */}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="valor">
-          {emAndamento && podeParcelar
+      <CampoValor
+        rotulo={
+          emAndamento && podeParcelar
             ? "Valor da parcela"
             : parcelado
               ? "Valor total da compra"
-              : "Valor"}
-        </Label>
-        <div className="flex items-baseline gap-2 border-b pb-1">
-          <span className="text-lg text-muted-foreground">R$</span>
-          <input
-            ref={campoValor}
-            id="valor"
-            inputMode="decimal"
-            autoComplete="off"
-            value={valor.texto}
-            onChange={(evento) => setValor(aplicarMascaraValor(evento.target.value))}
-            // Ao tocar no campo, seleciona tudo: o próximo dígito começa um valor novo.
-            onFocus={(evento) => evento.target.select()}
-            disabled={grupoInteiro}
-            className={`w-full bg-transparent text-3xl font-semibold tabular-nums outline-none disabled:opacity-50 ${
-              tipo === "despesa" ? "text-saida" : "text-entrada"
-            }`}
-          />
-        </div>
-      </div>
+              : "Valor"
+        }
+        valor={valor}
+        onChange={setValor}
+        tipo={tipo}
+        desativado={grupoInteiro}
+        campoRef={campoValor}
+      />
 
       {/* Meio de pagamento */}
       <fieldset className="flex flex-col gap-1.5" disabled={ehParcela}>
         <legend className="mb-1.5 text-sm font-medium">Meio de pagamento</legend>
-        <div className="flex flex-wrap gap-2">
-          {MEIOS_PAGAMENTO.map((opcao) => (
-            <Chip key={opcao} ativo={meio === opcao} onClick={() => setMeio(opcao)}>
-              {ROTULO_MEIO[opcao]}
-            </Chip>
-          ))}
-        </div>
+        <SeletorMeio meio={meio} onChange={setMeio} />
         {meio === "credito" && tipo === "despesa" && !edicao && (
           <p className="text-xs text-muted-foreground">
             Lance a compra no dia em que ela foi feita. Pagar a fatura não é uma despesa nova (seria
@@ -362,28 +324,11 @@ function Formulario({ categorias, padroes, edicao, campoValor, aoTerminar }: For
         </div>
       )}
 
-      {/* Categoria */}
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="mb-1.5 text-sm font-medium">Categoria</legend>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {categoriasDoTipo.map((categoria) => (
-            <button
-              key={categoria.id}
-              type="button"
-              aria-pressed={categoriaId === categoria.id}
-              onClick={() => setCategoriaId(categoria.id)}
-              className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border p-1.5 text-center text-xs transition-colors ${
-                categoriaId === categoria.id
-                  ? "border-primary bg-primary/5 font-medium"
-                  : "hover:bg-muted"
-              }`}
-            >
-              <IconeCategoria icone={categoria.icone} cor={categoria.cor} tamanho="sm" />
-              <span className="line-clamp-2 leading-tight">{categoria.nome}</span>
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      <GradeCategorias
+        categorias={categoriasDoTipo}
+        selecionada={categoriaId}
+        onChange={setCategoriaId}
+      />
 
       {/* Data */}
       <div className="flex flex-col gap-1.5">
@@ -520,31 +465,5 @@ function Formulario({ categorias, padroes, edicao, campoValor, aoTerminar }: For
         </div>
       )}
     </form>
-  );
-}
-
-function Chip({
-  ativo,
-  onClick,
-  desativado,
-  children,
-}: {
-  ativo: boolean;
-  onClick: () => void;
-  desativado?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={ativo}
-      onClick={onClick}
-      disabled={desativado}
-      className={`h-10 min-w-11 rounded-full border px-4 text-sm transition-colors disabled:opacity-50 ${
-        ativo ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

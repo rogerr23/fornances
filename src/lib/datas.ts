@@ -113,6 +113,12 @@ export function formatarDiaCurto(data: Data): string {
   return format(parseISO(data), "d MMM", { locale: ptBR });
 }
 
+/** "2026-12-15" → "15/12/2026" */
+export function formatarDataCompleta(data: Data): string {
+  const [ano, mes, dia] = data.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
 /** "2026-11" → "Novembro, 2026" */
 export function formatarMes(mes: Mes): string {
   const texto = format(primeiroDia(mes), "MMMM, yyyy", { locale: ptBR });

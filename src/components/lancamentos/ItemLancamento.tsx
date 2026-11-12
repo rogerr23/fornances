@@ -1,5 +1,7 @@
 "use client";
 
+import { Repeat } from "lucide-react";
+
 import { IconeCategoria } from "@/components/categorias/IconeCategoria";
 import { formatarCentavos } from "@/lib/dinheiro";
 import { descricaoComParcela } from "@/lib/parcelas";
@@ -30,7 +32,12 @@ export function ItemLancamento({
     >
       <IconeCategoria icone={categoria.icone} cor={categoria.cor} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{titulo}</p>
+        <p className="flex items-center gap-1 truncate text-sm font-medium">
+          {titulo}
+          {lancamento.recorrenciaId && (
+            <Repeat className="size-3 shrink-0 text-muted-foreground" aria-label="Recorrente" />
+          )}
+        </p>
         <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
           {categoria.nome} · {ROTULO_MEIO[lancamento.meioPagamento]}
           {agendado && (
