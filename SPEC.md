@@ -58,7 +58,26 @@ Consulte a documentação atual de Next.js, Drizzle e Better Auth antes de confi
    - Variação % = `(atual - anterior) / anterior`. Se anterior = 0, mostrar "—" (não dividir por zero).
    - Para **despesas, queda é bom** (verde) e alta é ruim (vermelho). Para **receitas**, o contrário.
 6. **Categorias:** cada uma é do tipo `receita` ou `despesa`. As categorias padrão são criadas junto com o usuário (seed por usuário, ver seção 8). Categoria com lançamentos não é apagada, é arquivada (`arquivadoEm`).
-7. **Toda query e toda mutation filtra por `usuarioId` da sessão.** Nunca confiar em `usuarioId` vindo do cliente.
+7. **Toda query e toda mutation filtra por `usuarioId` da sessão.** Nunca confiar em `usuarioId` vindo do cliente. Única exceção: o gerador automático de recorrentes (regra 9), que roda sem sessão, protegido por segredo (seção 8), e mesmo assim trata cada usuário separadamente.
+8. **Parcelas já em andamento** (compra parcelada antes de começar a usar o app):
+   - No formulário, com meio = Crédito, a opção **"Compra já em andamento"** troca os campos para: **parcela atual** (k), **total de parcelas** (N), **valor da parcela** e **data da parcela atual** (padrão: hoje).
+   - Cria **só as parcelas de k até N**: mesmo `grupoParcelamentoId`, `numeroParcela` de k..N, `totalParcelas = N`, todas com o mesmo valor.
+   - Datas: parcela i = data da parcela atual + (i-k) meses, com a mesma regra do último dia do mês da regra 4.
+   - As parcelas de 1 a k-1 **não são criadas**. Os meses antes de eu usar o app não ganham gastos soltos que distorceriam a comparação.
+   - Editar/excluir segue a regra 4 (só nesta ou no grupo inteiro).
+9. **Recorrentes** (assinaturas e receitas fixas — ex.: Netflix, academia, salário, bolsa):
+   - **Cadastro:** descrição, tipo (despesa ou receita), categoria, meio de pagamento, valor, **dia da cobrança** (1–31) e **mês de início** (padrão: mês atual; nunca no passado). Frequência: **só mensal**.
+   - **Dia que não existe no mês** (31 em fevereiro): a cobrança cai no último dia do mês.
+   - **Geração automática no começo do mês:** no dia 1 de cada mês (fuso de SP), o app cria o lançamento daquele mês para cada recorrente ativa, **já com a data exata da cobrança** (ex.: Netflix → 15/12). Assim, desde o dia 1 eu vejo o que vai ser debitado e quando.
+   - **Lançamentos com data futura** aparecem como **"Agendado"** até o dia chegar. Isso vale também para parcelas futuras.
+   - **Primeira cobrança:** ao cadastrar (ou reativar), a tela mostra antes de salvar **"Primeira cobrança: 15/12/2026"**. Se o dia da cobrança deste mês ainda não passou (dia ≥ hoje), o lançamento deste mês é criado na hora. Se já passou, a primeira cobrança é no mês seguinte (o deste mês, se existiu, eu lanço à mão).
+   - **Nunca gera meses retroativos.**
+   - **Lançamentos gerados são lançamentos normais:** entram nos totais e comparações pela data, e ficam ligados à recorrente por `recorrenciaId` + `competencia`. Editar um deles muda só aquele mês. Excluir um deles **não faz ele voltar**, porque o gerador avança por `ultimaCompetenciaGerada`.
+   - **Editar a recorrente** (valor, dia, meio, categoria, descrição) atualiza o lançamento **agendado** deste mês (se a data ainda não chegou) e os próximos meses. Os já debitados não mudam.
+   - **Cancelar:** informo a **data do cancelamento** (padrão: hoje).
+     - Lançamentos dessa recorrente com data **depois** do cancelamento são apagados, e nenhum mês novo é gerado. Os já debitados ficam.
+     - A recorrente continua na lista como **"Cancelada em 20/11/2026"** e pode ser **reativada**. Ao reativar, vale a regra da primeira cobrança.
+   - **Comparação:** como a comparação do mês em andamento usa só de 1 até hoje (regra 5), cobranças agendadas para depois de hoje não distorcem os números.
 
 ### Categorias padrão (seed)
 
@@ -126,6 +145,34 @@ export const lancamentos = pgTable(
 );
 ```
 
+Recorrentes (Fase 4) — tabela nova e duas colunas novas em `lancamentos`:
+
+```ts
+export const recorrencias = pgTable("recorrencias", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  usuarioId: text("usuario_id").notNull(), // FK usuarios, on delete cascade
+  categoriaId: uuid("categoria_id").notNull(), // FK composta (categoria, usuario, tipo), igual a lancamentos
+  tipo: tipoLancamento("tipo").notNull(),
+  meioPagamento: meioPagamento("meio_pagamento").notNull(),
+  descricao: text("descricao").notNull(), // "Netflix", "Salário"
+  valorCentavos: integer("valor_centavos").notNull(), // check > 0
+  diaCobranca: smallint("dia_cobranca").notNull(), // check 1..31
+  inicioEm: date("inicio_em").notNull(), // 1º dia do mês da primeira cobrança
+  ultimaCompetenciaGerada: date("ultima_competencia_gerada"), // 1º dia do último mês já gerado
+  canceladaEm: date("cancelada_em"), // null = ativa
+  criadoEm: timestamp(...).defaultNow().notNull(),
+  atualizadoEm: timestamp(...).defaultNow().notNull(),
+});
+
+// Em `lancamentos`:
+recorrenciaId: uuid("recorrencia_id"), // FK recorrencias, on delete set null
+competencia: date("competencia"), // 1º dia do mês da cobrança; só junto com recorrenciaId
+// + unique (recorrencia_id, competencia) para nunca gerar o mesmo mês duas vezes
+// + check: recorrenciaId e competencia preenchidos juntos; não misturar com parcelamento
+```
+
+A referência atual do schema é sempre `src/db/schema.ts` (o bloco acima mostra só o que entra na Fase 4).
+
 Validar com Zod (e no banco quando possível): `tipo` do lançamento = `tipo` da categoria; campos de parcela (`grupoParcelamentoId`, `numeroParcela`, `totalParcelas`) só preenchidos quando `meioPagamento = 'credito'`; `totalParcelas` entre 2 e 48.
 
 Tipos inferidos do schema também em português: `type Lancamento = typeof lancamentos.$inferSelect`, `type NovoLancamento = typeof lancamentos.$inferInsert`, `type Categoria = typeof categorias.$inferSelect`.
@@ -145,6 +192,7 @@ Abre por botão **"+ Lançar"** (header no desktop, botão flutuante no mobile).
 - **Data** = hoje por padrão, com atalhos "Hoje" / "Ontem" / escolher
 - **Descrição** opcional
 - **Parcelas** (aparece só quando meio de pagamento = Crédito): 1x a 48x, mostrando o valor de cada parcela
+- **"Compra já em andamento"** (só com Crédito parcelado): parcela atual, total, valor da parcela e data da parcela atual (regra 3.8)
 - Botões **Salvar** e **Salvar e lançar outro**
 - Toast de confirmação com **Desfazer**
 
@@ -159,21 +207,30 @@ Seletor de mês no header (padrão: mês atual). Botão de **olho** para ocultar
 3. **Gastos por categoria**: lista ordenada por valor, com barra proporcional, valor atual, valor do mês anterior e seta ↑↓ com %. **É o bloco mais importante da tela.**
 4. **Gastos por meio de pagamento**: crédito/débito/Pix/VR/dinheiro com total, % do mês e variação.
 5. **Últimos lançamentos**: 5 mais recentes + link "Ver todos".
+6. **Cobranças do mês**: recorrentes do mês selecionado ordenadas pelo dia, com dia, descrição, valor e status (**Agendado** / **Debitado**), mais o total previsto de despesas fixas e de receitas fixas. Link "Ver recorrentes".
 
 ### 5.3 Lançamentos
 
 - Lista agrupada por dia ("Hoje", "Ontem", "Seg, 9 nov"), com total do dia
 - Filtros: mês, tipo, categoria, meio de pagamento, busca por descrição (estado na URL via search params, com nomes em português: `?mes=2026-11&tipo=despesa&categoria=...&meio=pix&busca=...`)
 - Editar e excluir (com a regra de parcelas da seção 3.4)
+- Lançamentos com data futura (parcelas e recorrentes) com o selo **"Agendado"**; lançamentos de recorrentes com um ícone de repetição
 - Paginação por cursor ou "carregar mais"
 
 ### 5.4 Categorias
 
 CRUD simples: nome, tipo, cor, ícone. Arquivar em vez de excluir quando houver lançamentos.
 
+### 5.5 Recorrentes
+
+- Duas seções: **Ativas** (ordenadas pelo dia da cobrança) e **Canceladas** (histórico, com a data do cancelamento)
+- Topo com **total mensal comprometido** (despesas fixas) e **receitas fixas**
+- Criar, editar, **cancelar** (pede a data, padrão hoje) e **reativar**, seguindo a regra 3.9
+- No formulário de cadastro, mostrar a prévia **"Primeira cobrança: dd/mm/aaaa"** antes de salvar
+
 ### Fora do escopo do MVP (não implementar agora)
 
-Cartões e faturas, metas/orçamentos, contas recorrentes, score de saúde financeira, importação de extrato, Open Finance, modo offline, multiusuário público, recuperação de senha por e-mail.
+Cartões e faturas, metas/orçamentos, recorrências com frequência diferente de mensal (anual, semanal), score de saúde financeira, importação de extrato, Open Finance, modo offline, multiusuário público, recuperação de senha por e-mail.
 
 ---
 
@@ -187,8 +244,8 @@ Cartões e faturas, metas/orçamentos, contas recorrentes, score de saúde finan
   - Saída / negativo: vermelho `~#F0384B`
   - Neutro secundário: roxo `~#7C5CFC` (reservado para investimentos no futuro)
 - Badges de variação em pílula: fundo claro + texto colorido (`+10,5%`)
-- **Desktop:** sidebar fixa à esquerda com logo "Fornances", grupo "Análise" (Início, Lançamentos, Categorias) e usuário no rodapé (com opção **Sair**); header com saudação ("Boa noite, Roger" conforme a hora), seletor de mês e botão "+ Lançar"
-- **Mobile (prioridade):** sem sidebar; **bottom navigation** (Início · Lançamentos · [+] · Categorias); cards empilhados em 1 coluna; gráfico com scroll horizontal se preciso; alvos de toque ≥ 44px
+- **Desktop:** sidebar fixa à esquerda com logo "Fornances", grupo "Análise" (Início, Lançamentos, Recorrentes, Categorias) e usuário no rodapé (com opção **Sair**); header com saudação ("Boa noite, Roger" conforme a hora), seletor de mês e botão "+ Lançar"
+- **Mobile (prioridade):** sem sidebar; **bottom navigation** (Início · Lançamentos · [+] · Recorrentes · Categorias); cards empilhados em 1 coluna; gráfico com scroll horizontal se preciso; alvos de toque ≥ 44px
 - Suporte a **dark mode** via tokens (pode vir depois do MVP, mas não hardcodar cores)
 - Valores em pt-BR: `R$ 1.234,56`, datas `11 nov`, meses `Novembro, 2026`
 
@@ -210,21 +267,25 @@ Cartões e faturas, metas/orçamentos, contas recorrentes, score de saúde finan
 ├── drizzle/                         # migrations geradas
 ├── public/icons/                    # ícones PWA
 ├── scripts/
-│   └── criar-usuario.ts             # cria meu usuário + categorias padrão (seção 8)
+│   ├── criar-usuario.ts             # cria meu usuário + categorias padrão (seção 8)
+│   └── gerar-recorrencias.ts        # roda o gerador na mão (útil em dev, onde não há cron)
 ├── src/
 │   ├── app/
 │   │   ├── (auth)/login/page.tsx
 │   │   ├── (app)/layout.tsx         # barra lateral/navegação inferior + cabeçalho
 │   │   ├── (app)/page.tsx           # Início
 │   │   ├── (app)/lancamentos/page.tsx
+│   │   ├── (app)/recorrentes/page.tsx
 │   │   ├── (app)/categorias/page.tsx
 │   │   ├── api/auth/[...all]/route.ts
+│   │   ├── api/cron/recorrencias/route.ts  # gerador diário (Vercel Cron), protegido por CRON_SECRET
 │   │   └── manifest.ts
 │   ├── components/
 │   │   ├── ui/                      # shadcn (não renomear)
 │   │   ├── auth/                    # FormularioLogin, BotaoSair
 │   │   ├── inicio/                  # CardIndicador, GraficoAnual, GastosPorCategoria, GastosPorMeioPagamento
 │   │   ├── lancamentos/             # FormularioLancamento, ListaLancamentos, FiltrosLancamentos
+│   │   ├── recorrentes/             # FormularioRecorrente, ListaRecorrentes, DialogoCancelamento
 │   │   ├── categorias/              # FormularioCategoria, ListaCategorias
 │   │   └── layout/                  # BarraLateral, NavegacaoInferior, Cabecalho, SeletorMes
 │   ├── db/
@@ -236,16 +297,19 @@ Cartões e faturas, metas/orçamentos, contas recorrentes, score de saúde finan
 │   │   ├── auth-client.ts           # client do Better Auth para componentes "use client"
 │   │   ├── dinheiro.ts              # parse/formatação de centavos
 │   │   ├── datas.ts                 # intervalos de mês, mesmo período anterior, fuso SP
-│   │   ├── parcelas.ts              # geração de parcelas
+│   │   ├── parcelas.ts              # geração de parcelas (novas e já em andamento)
+│   │   ├── recorrencias.ts          # data da cobrança no mês, primeira cobrança, meses a gerar
 │   │   └── comparacao.ts            # variação %, regra de cor
 │   ├── server/
 │   │   ├── auth-config.ts           # criarAuth(db): configuração do Better Auth
 │   │   ├── auth.ts                  # `auth` do app + obterSessao() + exigirUsuario()
-│   │   ├── queries/                 # inicio.ts, lancamentos.ts, categorias.ts
-│   │   └── actions/                 # lancamentos.ts, categorias.ts
+│   │   ├── queries/                 # inicio.ts, lancamentos.ts, recorrencias.ts, categorias.ts
+│   │   ├── actions/                 # lancamentos.ts, recorrencias.ts, categorias.ts
+│   │   └── gerador-recorrencias.ts  # gerarCobrancasPendentes(db, usuarioId, hoje): usado pelo cron, pelas actions e pelo script
 │   ├── proxy.ts                     # redireciona para /login quem não tem cookie de sessão
 │   └── tests/                       # dinheiro.test.ts, datas.test.ts, parcelas.test.ts, comparacao.test.ts
 ├── drizzle.config.ts
+├── vercel.json                      # agenda o cron diário das recorrentes
 ├── .env.example
 └── SPEC.md
 ```
@@ -256,10 +320,12 @@ Cartões e faturas, metas/orçamentos, contas recorrentes, score de saúde finan
 - `obterGastosPorCategoria(usuarioId, mes)` → `[{ categoriaId, nome, cor, icone, atual, anterior, variacaoPct }]`
 - `obterGastosPorMeioPagamento(usuarioId, mes)` → `[{ meioPagamento, atual, anterior, participacaoPct, variacaoPct }]`
 - `obterSerieAnual(usuarioId, ano)` → `[{ mes: 1..12, receitas, despesas }]` (12 posições, zeros quando vazio)
+- `obterCobrancasDoMes(usuarioId, mes)` → `[{ recorrenciaId, descricao, dataLancamento, valorCentavos, tipo, status: 'agendado' | 'debitado' }]`
 
 ### Actions principais
 
 - `src/server/actions/lancamentos.ts`: `criarLancamento`, `editarLancamento`, `excluirLancamento` (estes dois com `escopo: 'somente-este' | 'todo-grupo'` para parcelas), `desfazerLancamento`
+- `src/server/actions/recorrencias.ts`: `criarRecorrencia`, `editarRecorrencia`, `cancelarRecorrencia(id, dataCancelamento)`, `reativarRecorrencia`
 - `src/server/actions/categorias.ts`: `criarCategoria`, `editarCategoria`, `arquivarCategoria`, `excluirCategoria`
 
 ---
@@ -276,6 +342,11 @@ Cartões e faturas, metas/orçamentos, contas recorrentes, score de saúde finan
 - Helper `exigirUsuario()` usado em **toda** query e action; retorna o usuário da sessão ou redireciona.
 - Botão **Sair** no rodapé da barra lateral (desktop) e no menu do usuário (mobile).
 - Nenhum segredo no código; `.env` no `.gitignore`; `.env.example` versionado.
+- **Gerador de recorrentes:**
+  - **Vercel Cron diário** (`vercel.json`, `0 3 * * *` em UTC = meia-noite em SP) chama `GET /api/cron/recorrencias`. A rota só aceita o cabeçalho `Authorization: Bearer ${CRON_SECRET}` (é o que a Vercel envia) e responde 401 a qualquer outro.
+  - **Roda todo dia, mas só cria o que falta.** Fica idempotente por `ultimaCompetenciaGerada` + unique (recorrencia, competencia). Se um dia o cron falhar, o seguinte completa.
+  - Também roda **na hora** ao criar, editar ou reativar uma recorrente (só para aquele usuário), e pelo script `pnpm db:gerar-recorrencias` em dev.
+  - O plano Hobby da Vercel permite 1 execução por dia, com horário aproximado (pode atrasar até ~1h). É suficiente para "no dia 1 já aparecer".
 
 ### Variáveis de ambiente (`.env.example`)
 
@@ -284,9 +355,10 @@ DATABASE_URL=            # Neon, string POOLED (host com -pooler) — usada pela
 DATABASE_URL_UNPOOLED=   # Neon, string direta — usada pelo drizzle-kit nas migrations e pelo script de criar usuário
 BETTER_AUTH_SECRET=
 BETTER_AUTH_URL=http://localhost:3000
+CRON_SECRET=             # gerar com: openssl rand -base64 32 (Fase 4)
 ```
 
-Scripts no `package.json`: `dev`, `build`, `lint`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:studio`, `db:criar-usuario`.
+Scripts no `package.json`: `dev`, `build`, `lint`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:studio`, `db:criar-usuario`, `db:gerar-recorrencias` (Fase 4).
 
 ---
 
@@ -298,6 +370,8 @@ Cobrir obrigatoriamente:
 - `datas.ts`: intervalo "mesmo período do mês anterior" (inclusive 31/03 → 28 ou 29/02), início/fim de mês no fuso de SP
 - `comparacao.ts`: variação com anterior = 0, regra de cor para despesa vs. receita
 - `dinheiro.ts`: parse de `"1.234,56"` → `123456`, formatação
+- `parcelas.ts` (já em andamento): "parcela 5 de 10" cria só da 5 à 10, com datas a partir da parcela atual (inclusive dia 31)
+- `recorrencias.ts`: dia 31 em fevereiro → 28/29; primeira cobrança quando o dia deste mês já passou (vai para o mês seguinte) e quando ainda não passou; meses a gerar não incluem meses antes do início, depois do cancelamento nem já gerados; nunca retroativo
 
 Nomes dos testes (`describe`/`it`) em português.
 
@@ -325,16 +399,20 @@ Schema, migration inicial, `lib/*` com testes.
 ✅ Migration aplicada no Neon; testes da seção 9 passando.
 
 **Fase 3 — Lançamentos**
-Formulário rápido (Sheet no mobile / Dialog no desktop), Server Actions de criar/editar/excluir (com parcelas), página de lista com filtros.
-✅ Consigo lançar, parcelar, editar e excluir pelo celular.
+Formulário rápido (Sheet no mobile / Dialog no desktop), Server Actions de criar/editar/excluir (com parcelas, inclusive **compra já em andamento**), página de lista com filtros e selo "Agendado".
+✅ Consigo lançar, parcelar (nova e em andamento), editar e excluir pelo celular.
 
-**Fase 4 — Início (dashboard)**
-Layout (barra lateral + navegação inferior + cabeçalho), queries de agregação e todos os blocos da seção 5.2, com estados de loading (skeleton) e vazio.
+**Fase 4 — Recorrentes**
+Tabela `recorrencias` + colunas em `lancamentos` (migration), `lib/recorrencias.ts` com testes, gerador (`server/gerador-recorrencias.ts`), rota do cron + `vercel.json`, script `db:gerar-recorrencias`, página de Recorrentes com criar/editar/cancelar/reativar.
+✅ Cadastro uma assinatura e vejo a prévia da primeira cobrança; o lançamento do mês aparece agendado na data certa; rodar o gerador de novo não duplica; cancelar apaga só os agendados depois da data; a rota do cron recusa chamada sem o segredo.
+
+**Fase 5 — Início (dashboard)**
+Layout (barra lateral + navegação inferior + cabeçalho), queries de agregação e todos os blocos da seção 5.2 (inclusive **Cobranças do mês**), com estados de loading (skeleton) e vazio.
 ✅ Números conferem com uma soma manual no Drizzle Studio; comparação "mesmo período" correta.
 
-**Fase 5 — Categorias + PWA + Deploy**
-CRUD de categorias, `manifest.ts`, ícones, `theme-color`, deploy na Vercel com as env vars, rodar `db:criar-usuario` apontando para o banco de produção.
-✅ App instalado na tela inicial do celular funcionando em produção.
+**Fase 6 — Categorias + PWA + Deploy**
+CRUD de categorias, `manifest.ts`, ícones, `theme-color`, deploy na Vercel com as env vars (inclusive `CRON_SECRET`), conferir o cron no painel da Vercel, rodar `db:criar-usuario` apontando para o banco de produção.
+✅ App instalado na tela inicial do celular funcionando em produção; cron das recorrentes rodando.
 
 > Obs.: a Fase 1 cria a tabela de categorias junto com as de auth (o seed precisa dela). O restante do schema (`lancamentos`) entra na Fase 2.
 
