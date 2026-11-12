@@ -1,12 +1,18 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
+  date,
+  foreignKey,
   index,
   integer,
   pgEnum,
   pgTable,
+  smallint,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -107,6 +113,13 @@ export const limitesRequisicao = pgTable("limites_requisicao", {
 // ---------------------------------------------------------------------------
 
 export const tipoLancamento = pgEnum("tipo_lancamento", ["receita", "despesa"]);
+export const meioPagamento = pgEnum("meio_pagamento", [
+  "credito",
+  "debito",
+  "pix",
+  "vale",
+  "dinheiro",
+]);
 
 export const categorias = pgTable(
   "categorias",
@@ -122,10 +135,72 @@ export const categorias = pgTable(
     arquivadoEm: timestamp("arquivado_em", { withTimezone: true }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [uniqueIndex("categorias_usuario_nome_tipo_uq").on(t.usuarioId, t.nome, t.tipo)],
+  (t) => [
+    uniqueIndex("categorias_usuario_nome_tipo_uq").on(t.usuarioId, t.nome, t.tipo),
+    // Não muda nada nas categorias em si (o `id` já é único). Existe só para a chave
+    // estrangeira composta de `lancamentos` poder apontar para (id, usuario_id, tipo).
+    unique("categorias_id_usuario_tipo_uq").on(t.id, t.usuarioId, t.tipo),
+  ],
+);
+
+export const lancamentos = pgTable(
+  "lancamentos",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    usuarioId: text("usuario_id")
+      .notNull()
+      .references(() => usuarios.id, { onDelete: "cascade" }),
+    categoriaId: uuid("categoria_id").notNull(),
+    tipo: tipoLancamento("tipo").notNull(),
+    meioPagamento: meioPagamento("meio_pagamento").notNull(),
+    valorCentavos: integer("valor_centavos").notNull(), // sempre positivo; o sinal vem de `tipo`
+    // `date` sem hora. O Drizzle devolve como texto "AAAA-MM-DD", que é o formato usado
+    // em todo o src/lib/datas.ts (evita surpresas de fuso horário com objetos Date).
+    dataLancamento: date("data_lancamento").notNull(),
+    descricao: text("descricao"),
+    grupoParcelamentoId: uuid("grupo_parcelamento_id"),
+    numeroParcela: smallint("numero_parcela"),
+    totalParcelas: smallint("total_parcelas"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("lancamentos_usuario_data_idx").on(t.usuarioId, t.dataLancamento),
+    index("lancamentos_grupo_parcelamento_idx").on(t.grupoParcelamentoId),
+    index("lancamentos_categoria_idx").on(t.categoriaId),
+
+    // Chave estrangeira COMPOSTA: o lançamento só pode usar uma categoria que seja
+    // do MESMO usuário e do MESMO tipo (receita/despesa). Mesmo que um bug no código
+    // tente misturar, o banco recusa.
+    foreignKey({
+      name: "lancamentos_categoria_fk",
+      columns: [t.categoriaId, t.usuarioId, t.tipo],
+      foreignColumns: [categorias.id, categorias.usuarioId, categorias.tipo],
+    }),
+
+    check("lancamentos_valor_positivo", sql`${t.valorCentavos} > 0`),
+    // Parcelas: ou os 3 campos estão preenchidos (e o meio é crédito), ou nenhum está.
+    check(
+      "lancamentos_parcelas_consistentes",
+      sql`(
+        ${t.grupoParcelamentoId} IS NULL AND ${t.numeroParcela} IS NULL AND ${t.totalParcelas} IS NULL
+      ) OR (
+        ${t.grupoParcelamentoId} IS NOT NULL AND ${t.numeroParcela} IS NOT NULL AND ${t.totalParcelas} IS NOT NULL
+        AND ${t.meioPagamento} = 'credito'
+        AND ${t.totalParcelas} BETWEEN 2 AND 48
+        AND ${t.numeroParcela} BETWEEN 1 AND ${t.totalParcelas}
+      )`,
+    ),
+  ],
 );
 
 export type Usuario = typeof usuarios.$inferSelect;
 export type Categoria = typeof categorias.$inferSelect;
 export type NovaCategoria = typeof categorias.$inferInsert;
+export type Lancamento = typeof lancamentos.$inferSelect;
+export type NovoLancamento = typeof lancamentos.$inferInsert;
 export type TipoLancamento = (typeof tipoLancamento.enumValues)[number];
+export type MeioPagamento = (typeof meioPagamento.enumValues)[number];

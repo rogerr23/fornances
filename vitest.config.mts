@@ -8,5 +8,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/tests/**/*.test.ts"],
+    // Mesmo fuso da Vercel. Garante que a lógica de datas não depende do fuso da máquina.
+    env: { TZ: "UTC" },
   },
 });

@@ -8,6 +8,13 @@
       "when": 1794441203248,
       "tag": "0000_auth_e_categorias",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794442685289,
+      "tag": "0001_lancamentos",
+      "breakpoints": true
     }
   ]
 }
