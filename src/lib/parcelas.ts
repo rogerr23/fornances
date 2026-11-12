@@ -74,3 +74,40 @@ export function descricaoComParcela(
     ? `${texto} (${numeroParcela}/${totalParcelas})`
     : `Parcela ${numeroParcela}/${totalParcelas}`;
 }
+
+/**
+ * Compra parcelada que já estava em andamento antes de usar o app (SPEC 3.8).
+ * "Estou na parcela 5 de 10, de R$ 150,00": cria só da 5ª à 10ª, todas com o mesmo valor.
+ * A parcela i cai na data da parcela atual + (i - parcelaAtual) meses.
+ */
+export function gerarParcelasRestantes(entrada: {
+  valorParcelaCentavos: number;
+  parcelaAtual: number;
+  totalParcelas: number;
+  dataParcelaAtual: Data;
+}): Parcela[] {
+  const { valorParcelaCentavos, parcelaAtual, totalParcelas, dataParcelaAtual } = entrada;
+
+  if (!Number.isSafeInteger(valorParcelaCentavos) || valorParcelaCentavos <= 0) {
+    throw new Error("O valor da parcela precisa ser um número inteiro de centavos maior que zero.");
+  }
+  if (
+    !Number.isInteger(totalParcelas) ||
+    totalParcelas < MINIMO_PARCELAS ||
+    totalParcelas > MAXIMO_PARCELAS
+  ) {
+    throw new Error(
+      `O número de parcelas precisa estar entre ${MINIMO_PARCELAS} e ${MAXIMO_PARCELAS}.`,
+    );
+  }
+  if (!Number.isInteger(parcelaAtual) || parcelaAtual < 1 || parcelaAtual > totalParcelas) {
+    throw new Error("A parcela atual precisa estar entre 1 e o total de parcelas.");
+  }
+
+  return Array.from({ length: totalParcelas - parcelaAtual + 1 }, (_, indice) => ({
+    numeroParcela: parcelaAtual + indice,
+    totalParcelas,
+    valorCentavos: valorParcelaCentavos,
+    dataLancamento: somarMeses(dataParcelaAtual, indice),
+  }));
+}

@@ -1,5 +1,6 @@
 import { TZDate } from "@date-fns/tz";
-import { addMonths, format, getDaysInMonth, isValid, parseISO } from "date-fns";
+import { addDays, addMonths, format, getDaysInMonth, isValid, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 // Convenções deste arquivo:
 // - Uma DATA é texto "AAAA-MM-DD" (mesmo formato da coluna `date` no Postgres).
@@ -105,4 +106,28 @@ export function intervalosDeComparacao(
     anterior: { inicio: dataDoMes(mesPassado, 1), fim: dataDoMes(mesPassado, ultimoDiaComparavel) },
     modo: "ate-hoje",
   };
+}
+
+/** "2026-11-11" → "11 nov" */
+export function formatarDiaCurto(data: Data): string {
+  return format(parseISO(data), "d MMM", { locale: ptBR });
+}
+
+/** "2026-11" → "Novembro, 2026" */
+export function formatarMes(mes: Mes): string {
+  const texto = format(primeiroDia(mes), "MMMM, yyyy", { locale: ptBR });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** Cabeçalho dos grupos da lista: "Hoje", "Ontem", "Amanhã" ou "Seg, 9 nov". */
+export function rotuloDoDia(data: Data, hoje: Data = hojeEmSaoPaulo()): string {
+  if (data === hoje) return "Hoje";
+  if (data === somarDias(hoje, -1)) return "Ontem";
+  if (data === somarDias(hoje, 1)) return "Amanhã";
+  const texto = format(parseISO(data), "EEEEEE, d MMM", { locale: ptBR }); // EEEEEE = "seg" no pt-BR;
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+export function somarDias(data: Data, quantidade: number): Data {
+  return format(addDays(parseISO(data), quantidade), "yyyy-MM-dd");
 }

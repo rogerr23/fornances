@@ -254,7 +254,9 @@ Cartões e faturas, metas/orçamentos, recorrências com frequência diferente d
 ## 7. Arquitetura e estrutura de pastas
 
 - **Leituras:** funções em `src/server/queries/*` chamadas por **Server Components**
-- **Escritas:** **Server Actions** em `src/server/actions/*`, sempre: (1) pegar sessão com `exigirUsuario()`, (2) validar com Zod, (3) executar filtrando por `usuarioId`, (4) `revalidatePath`
+- **Escritas:** **Server Actions** em `src/server/actions/*`, sempre: (1) pegar sessão com `exigirUsuario()`, (2) validar com Zod, (3) executar filtrando por `usuarioId`, (4) `refresh()` de `next/cache` (no Next 16 é o que atualiza a página depois de uma mudança, já que os dados não usam `"use cache"`)
+- **Queries** chamam `exigirUsuario()` por conta própria e **não recebem `usuarioId` como parâmetro**: assim nenhuma página consegue pedir dados de outro usuário por engano (padrão "Data Access Layer" da doc do Next)
+- **Avisos (toast)** com o `Toast` do Base UI (já vem com o shadcn), em `components/layout/Avisos.tsx` — sem biblioteca extra
 - **Lógica pura** (datas, parcelas, comparação, formatação) em `src/lib/*`, **sem acesso a banco**, coberta por testes
 - Agregações feitas **no SQL** (`date_trunc`, `sum`, `group by`) com Drizzle, nunca somando em JS
 
@@ -316,11 +318,11 @@ Cartões e faturas, metas/orçamentos, recorrências com frequência diferente d
 
 ### Queries principais (`src/server/queries/inicio.ts`)
 
-- `obterResumoMes(usuarioId, mes)` → `{ receitas, despesas, saldo, anterior: {...}, modoComparacao: 'ate-hoje' | 'mes-inteiro' }`
-- `obterGastosPorCategoria(usuarioId, mes)` → `[{ categoriaId, nome, cor, icone, atual, anterior, variacaoPct }]`
-- `obterGastosPorMeioPagamento(usuarioId, mes)` → `[{ meioPagamento, atual, anterior, participacaoPct, variacaoPct }]`
-- `obterSerieAnual(usuarioId, ano)` → `[{ mes: 1..12, receitas, despesas }]` (12 posições, zeros quando vazio)
-- `obterCobrancasDoMes(usuarioId, mes)` → `[{ recorrenciaId, descricao, dataLancamento, valorCentavos, tipo, status: 'agendado' | 'debitado' }]`
+- `obterResumoMes(mes)` → `{ receitas, despesas, saldo, anterior: {...}, modoComparacao: 'ate-hoje' | 'mes-inteiro' }`
+- `obterGastosPorCategoria(mes)` → `[{ categoriaId, nome, cor, icone, atual, anterior, variacaoPct }]`
+- `obterGastosPorMeioPagamento(mes)` → `[{ meioPagamento, atual, anterior, participacaoPct, variacaoPct }]`
+- `obterSerieAnual(ano)` → `[{ mes: 1..12, receitas, despesas }]` (12 posições, zeros quando vazio)
+- `obterCobrancasDoMes(mes)` → `[{ recorrenciaId, descricao, dataLancamento, valorCentavos, tipo, status: 'agendado' | 'debitado' }]`
 
 ### Actions principais
 

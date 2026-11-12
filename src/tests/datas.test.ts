@@ -3,11 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   ehDataValida,
   ehMesValido,
+  formatarDiaCurto,
+  formatarMes,
   hojeEmSaoPaulo,
   intervaloDoMes,
   intervalosDeComparacao,
   mesAnterior,
   mesAtual,
+  rotuloDoDia,
+  somarDias,
   somarMeses,
 } from "@/lib/datas";
 
@@ -113,5 +117,25 @@ describe("validação de texto", () => {
     expect(ehMesValido("2026-11")).toBe(true);
     expect(ehMesValido("2026-13")).toBe(false);
     expect(ehMesValido("2026-11-01")).toBe(false);
+  });
+});
+
+describe("textos de data em pt-BR", () => {
+  it("rótulo do dia na lista", () => {
+    expect(rotuloDoDia("2026-11-11", "2026-11-11")).toBe("Hoje");
+    expect(rotuloDoDia("2026-11-10", "2026-11-11")).toBe("Ontem");
+    expect(rotuloDoDia("2026-11-12", "2026-11-11")).toBe("Amanhã");
+    expect(rotuloDoDia("2026-11-09", "2026-11-11")).toBe("Seg, 9 nov");
+    expect(rotuloDoDia("2027-01-01", "2026-12-31")).toBe("Amanhã");
+  });
+
+  it("dia curto e mês por extenso", () => {
+    expect(formatarDiaCurto("2026-11-11")).toBe("11 nov");
+    expect(formatarMes("2026-11")).toBe("Novembro, 2026");
+  });
+
+  it("somarDias atravessa mês e ano", () => {
+    expect(somarDias("2026-12-31", 1)).toBe("2027-01-01");
+    expect(somarDias("2026-03-01", -1)).toBe("2026-02-28");
   });
 });
