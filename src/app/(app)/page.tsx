@@ -15,8 +15,8 @@ export default function Inicio() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
       <div className="rounded-xl border bg-card p-6">
-        <h1 className="text-xl font-semibold">Controle de Gastos</h1>
-        <p className="text-sm text-muted-foreground">Fase 0 — setup concluído.</p>
+        <h1 className="text-xl font-semibold">Fornances</h1>
+        <p className="text-sm text-muted-foreground">Fase 1 — login funcionando.</p>
 
         <div className="mt-4 flex flex-wrap gap-3">
           {amostrasDeCor.map((amostra) => (

@@ -13,7 +13,7 @@ const fonteMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Controle de Gastos",
+  title: { default: "Fornances", template: "%s · Fornances" },
   description: "Controle pessoal de gastos e receitas",
 };
 

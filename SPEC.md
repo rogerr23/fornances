@@ -1,4 +1,4 @@
-# Controle de Gastos — Especificação do projeto
+# Fornances — Especificação do projeto
 
 > Documento de contexto para o Claude Code. Leia inteiro antes de começar e siga as fases na ordem.
 > Referência visual: `docs/referencia-layout.jpg`.
@@ -6,6 +6,8 @@
 ---
 
 ## 1. Contexto
+
+**Nome do sistema: Fornances.** Usar esse nome em toda a interface: título das páginas (`%s · Fornances`), tela de login, logo da barra lateral, `appName` do Better Auth, nome do PWA no `manifest.ts` e textos dos scripts. Nunca usar "Controle de Gastos" como nome.
 
 Sistema **pessoal** para registrar e acompanhar meus gastos e receitas. Uso só eu por enquanto, mas o código já deve estar preparado para multiusuário no futuro (toda tabela de dados tem `usuarioId`).
 
@@ -185,7 +187,7 @@ Cartões e faturas, metas/orçamentos, contas recorrentes, score de saúde finan
   - Saída / negativo: vermelho `~#F0384B`
   - Neutro secundário: roxo `~#7C5CFC` (reservado para investimentos no futuro)
 - Badges de variação em pílula: fundo claro + texto colorido (`+10,5%`)
-- **Desktop:** sidebar fixa à esquerda com logo, grupo "Análise" (Início, Lançamentos, Categorias) e usuário no rodapé (com opção **Sair**); header com saudação ("Boa noite, Roger" conforme a hora), seletor de mês e botão "+ Lançar"
+- **Desktop:** sidebar fixa à esquerda com logo "Fornances", grupo "Análise" (Início, Lançamentos, Categorias) e usuário no rodapé (com opção **Sair**); header com saudação ("Boa noite, Roger" conforme a hora), seletor de mês e botão "+ Lançar"
 - **Mobile (prioridade):** sem sidebar; **bottom navigation** (Início · Lançamentos · [+] · Categorias); cards empilhados em 1 coluna; gráfico com scroll horizontal se preciso; alvos de toque ≥ 44px
 - Suporte a **dark mode** via tokens (pode vir depois do MVP, mas não hardcodar cores)
 - Valores em pt-BR: `R$ 1.234,56`, datas `11 nov`, meses `Novembro, 2026`
@@ -220,23 +222,28 @@ Cartões e faturas, metas/orçamentos, contas recorrentes, score de saúde finan
 │   │   └── manifest.ts
 │   ├── components/
 │   │   ├── ui/                      # shadcn (não renomear)
+│   │   ├── auth/                    # FormularioLogin, BotaoSair
 │   │   ├── inicio/                  # CardIndicador, GraficoAnual, GastosPorCategoria, GastosPorMeioPagamento
 │   │   ├── lancamentos/             # FormularioLancamento, ListaLancamentos, FiltrosLancamentos
 │   │   ├── categorias/              # FormularioCategoria, ListaCategorias
 │   │   └── layout/                  # BarraLateral, NavegacaoInferior, Cabecalho, SeletorMes
 │   ├── db/
-│   │   ├── index.ts                 # client Drizzle + Neon
+│   │   ├── conexao.ts               # criarConexao(url): client Drizzle + Neon (usado também pelos scripts)
+│   │   ├── index.ts                 # `db` do app (server-only, conexão pooled)
 │   │   ├── schema.ts
-│   │   └── seed.ts                  # semearCategoriasPadrao(usuarioId)
+│   │   └── seed.ts                  # semearCategoriasPadrao(db, usuarioId)
 │   ├── lib/
+│   │   ├── auth-client.ts           # client do Better Auth para componentes "use client"
 │   │   ├── dinheiro.ts              # parse/formatação de centavos
 │   │   ├── datas.ts                 # intervalos de mês, mesmo período anterior, fuso SP
 │   │   ├── parcelas.ts              # geração de parcelas
 │   │   └── comparacao.ts            # variação %, regra de cor
 │   ├── server/
-│   │   ├── auth.ts                  # config Better Auth + helper exigirUsuario()
+│   │   ├── auth-config.ts           # criarAuth(db): configuração do Better Auth
+│   │   ├── auth.ts                  # `auth` do app + obterSessao() + exigirUsuario()
 │   │   ├── queries/                 # inicio.ts, lancamentos.ts, categorias.ts
 │   │   └── actions/                 # lancamentos.ts, categorias.ts
+│   ├── proxy.ts                     # redireciona para /login quem não tem cookie de sessão
 │   └── tests/                       # dinheiro.test.ts, datas.test.ts, parcelas.test.ts, comparacao.test.ts
 ├── drizzle.config.ts
 ├── .env.example

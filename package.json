@@ -14,11 +14,13 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:criar-usuario": "tsx scripts/criar-usuario.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@neondatabase/serverless": "^1.2.0",
+    "better-auth": "1.7.18",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
     "drizzle-orm": "^0.45.4",
@@ -28,7 +30,8 @@
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
     "shadcn": "^4.23.0",
-    "tw-animate-css": "^1.4.0"
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",
@@ -42,6 +45,7 @@
     "prettier": "^3.9.10",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
   },
